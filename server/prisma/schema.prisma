@@ -18,7 +18,7 @@ enum Difficulty {
   HARD
 }
 
-enum QuizStatus {
+enum RunStatus {
   IN_PROGRESS
   FAILED
   COMPLETED
@@ -80,7 +80,7 @@ model Question {
   categoryId  String
   category    Category   @relation(fields: [categoryId], references: [id])
   prompt      String
-  explanation String?
+  explanation String
   difficulty  Difficulty @default(MEDIUM)
   isActive    Boolean    @default(true)
   createdAt   DateTime   @default(now())
@@ -111,7 +111,7 @@ model QuizRun {
   user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   categoryId        String
   category          Category   @relation(fields: [categoryId], references: [id])
-  status            QuizStatus @default(IN_PROGRESS)
+  status            RunStatus  @default(IN_PROGRESS)
   score             Int        @default(0)
   currentQuestionId String?
   startedAt         DateTime   @default(now())
