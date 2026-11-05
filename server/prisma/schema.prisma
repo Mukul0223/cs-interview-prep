@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum QuizStatus {
+  IN_PROGRESS
+  FAILED
+  COMPLETED
+  ABANDONED
+}
+
+enum ResourceKind {
+  NOTE
+  TABLE
+  CHEATSHEET
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+  quizRuns      QuizRun[]
+  resources     Resource[]
+}
+
+model RefreshToken {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash         String    @unique
+  familyId          String
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  replacedByTokenId String?
+  createdAt         DateTime  @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  description String
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  questions Question[]
+  quizRuns  QuizRun[]
+  resources Resource[]
+}
+
+model Question {
+  id          String     @id @default(uuid())
+  categoryId  String
+  category    Category   @relation(fields: [categoryId], references: [id])
+  prompt      String
+  explanation String?
+  difficulty  Difficulty @default(MEDIUM)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  options    Option[]
+  runAnswers RunAnswer[]
+
+  @@index([categoryId, isActive])
+}
+
+model Option {
+  id         String   @id @default(uuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text       String
+  isCorrect  Boolean  @default(false)
+  position   Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  runAnswers RunAnswer[]
+}
+
+model QuizRun {
+  id                String     @id @default(uuid())
+  userId            String
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId        String
+  category          Category   @relation(fields: [categoryId], references: [id])
+  status            QuizStatus @default(IN_PROGRESS)
+  score             Int        @default(0)
+  currentQuestionId String?
+  startedAt         DateTime   @default(now())
+  endedAt           DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  answers RunAnswer[]
+
+  @@index([userId, startedAt])
+}
+
+model RunAnswer {
+  id         String   @id @default(uuid())
+  runId      String
+  run        QuizRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+  optionId   String
+  option     Option   @relation(fields: [optionId], references: [id])
+  isCorrect  Boolean
+  answeredAt DateTime @default(now())
+
+  @@unique([runId, questionId])
+}
+
+model Resource {
+  id           String       @id @default(uuid())
+  categoryId   String?
+  category     Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  slug         String       @unique
+  title        String
+  kind         ResourceKind
+  bodyMarkdown String
+  isPublished  Boolean      @default(false)
+  createdById  String
+  createdBy    User         @relation(fields: [createdById], references: [id])
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
