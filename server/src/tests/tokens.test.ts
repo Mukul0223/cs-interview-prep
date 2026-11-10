@@ -5,14 +5,12 @@ import {
   generateRefreshToken,
   hashRefreshToken,
 } from "../lib/tokens.js";
+import { env } from "../config/env.js";
 import { Role } from "../generated/prisma/client.js";
 import { SignJWT } from "jose";
 
 describe("Token Management", () => {
   // Ensure a valid secret is present for tests
-  beforeEach(() => {
-    process.env.JWT_ACCESS_SECRET = "test-jwt-access-secret-min-32-chars-long";
-  });
 
   it("the token round-trips successfully", async () => {
     const input = { userId: "user-123", role: Role.USER };
@@ -37,7 +35,7 @@ describe("Token Management", () => {
   });
 
   it("an expired token is rejected", async () => {
-    const secret = process.env.JWT_ACCESS_SECRET!;
+    const secret = env.JWT_ACCESS_SECRET!;
     const secretBytes = new TextEncoder().encode(secret);
 
     // Build an expired token directly using jose with timestamps in the past
@@ -67,5 +65,6 @@ describe("Token Management", () => {
     // SHA-256 hex string must be exactly 64 characters long
     expect(hash).toHaveLength(64);
     expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(hashRefreshToken(token1)).toBe(hashRefreshToken(token1));
   });
 });
