@@ -38,7 +38,7 @@ describe("POST /api/v1/auth/register", () => {
     expect(response.body.user).not.toHaveProperty("passwordHash");
 
     // Verify Access Token validity
-    const decodedToken = verifyAccessToken(response.body.accessToken);
+    const decodedToken = await verifyAccessToken(response.body.accessToken);
     expect(decodedToken).toBeDefined();
 
     // 2. Check Set-Cookie header security attributes
@@ -111,7 +111,7 @@ describe("POST /api/v1/auth/register", () => {
       displayName: "Test",
     });
     expect(resShortPwd.status).toBe(400);
-    expect(resShortPwd.body.code).toBe("VALIDATION_ERROR");
+    expect(resShortPwd.body.error.code).toBe("VALIDATION_ERROR");
     expect(JSON.stringify(resShortPwd.body)).toMatch(/password/i);
 
     // Invalid email
@@ -121,7 +121,7 @@ describe("POST /api/v1/auth/register", () => {
       displayName: "Test",
     });
     expect(resBadEmail.status).toBe(400);
-    expect(resBadEmail.body.code).toBe("VALIDATION_ERROR");
+    expect(resBadEmail.body.error.code).toBe("VALIDATION_ERROR");
     expect(JSON.stringify(resBadEmail.body)).toMatch(/email/i);
 
     // Missing displayName
@@ -130,7 +130,7 @@ describe("POST /api/v1/auth/register", () => {
       password: "SecurePassword123!",
     });
     expect(resNoName.status).toBe(400);
-    expect(resNoName.body.code).toBe("VALIDATION_ERROR");
+    expect(resNoName.body.error.code).toBe("VALIDATION_ERROR");
     expect(JSON.stringify(resNoName.body)).toMatch(/displayName/i);
   });
 

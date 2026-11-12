@@ -2,12 +2,9 @@ import { Request, Response, NextFunction } from "express";
 import * as z from "zod";
 import ApiError from "../utils/ApiError.js";
 
-export const validate = <T extends z.ZodType>(
-  schema: T,
-  source: "body" | "query" | "params" = "body",
-) => {
+export const validate = <T extends z.ZodType>(schema: T) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const result = schema.safeParse(req[source]);
+    const result = schema.safeParse(req.body);
 
     if (!result.success) {
       const formattedErrors = result.error.issues.map((issue) => ({
@@ -23,7 +20,7 @@ export const validate = <T extends z.ZodType>(
         ),
       );
     }
-    req[source] = result.data;
+    req.body = result.data;
     next();
   };
 };

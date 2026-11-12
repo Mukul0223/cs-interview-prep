@@ -20,10 +20,11 @@ describe("Application & Database Tests", () => {
     expect(response.body.error.code).toBe("NOT_FOUND");
   });
 
-  it("prisma.user.count() returns 0, proving the tests hit the migrated test database", async () => {
-    const count = await prisma.user.count();
-
-    expect(count).toBe(0);
+  it("check the current db is test db", async () => {
+    const rows = await prisma.$queryRaw<
+      { db: string }[]
+    >`SELECT current_database() AS db`;
+    expect(rows[0].db).toContain("test");
   });
 
   afterAll(async () => {

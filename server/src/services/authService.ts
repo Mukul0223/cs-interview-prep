@@ -28,7 +28,6 @@ export async function register({
       });
       const session = await createSession(tx, {
         id: user.id,
-        email: user.email,
         role: user.role,
       });
 

@@ -1,39 +1,34 @@
-import crypto from "crypto";
-import { SignJWT } from "jose";
-import { Prisma } from "../generated/prisma/client.js";
+import crypto from "node:crypto";
+import type { Prisma, Role } from "../generated/prisma/client.js";
 import { env } from "../config/env.js";
+import {
+  generateRefreshToken,
+  hashRefreshToken,
+  signAccessToken,
+} from "../lib/tokens.js";
 
 const REFRESH_TTL_MS = env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
-const encodedAccessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 
 export async function createSession(
   tx: Prisma.TransactionClient,
-  user: { id: string; email: string; role?: string },
+  user: { id: string; role: Role },
   existingFamilyId?: string,
 ) {
-  const rawRefreshToken = crypto.randomBytes(40).toString("hex");
-  const tokenHash = crypto
-    .createHash("sha256")
-    .update(rawRefreshToken)
-    .digest("hex");
-  const familyId = existingFamilyId ?? crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + REFRESH_TTL_MS);
+  const refreshToken = generateRefreshToken();
 
   await tx.refreshToken.create({
     data: {
       userId: user.id,
-      tokenHash,
-      familyId,
-      expiresAt,
+      tokenHash: hashRefreshToken(refreshToken),
+      familyId: existingFamilyId ?? crypto.randomUUID(),
+      expiresAt: new Date(Date.now() + REFRESH_TTL_MS),
     },
   });
 
-  const accessToken = await new SignJWT({ email: user.email, role: user.role })
-    .setProtectedHeader({ alg: "HS256" })
-    .setSubject(user.id)
-    .setIssuedAt()
-    .setExpirationTime(env.ACCESS_TOKEN_TTL_MINUTES)
-    .sign(encodedAccessSecret);
+  const accessToken = await signAccessToken({
+    userId: user.id,
+    role: user.role,
+  });
 
-  return { accessToken, refreshToken: rawRefreshToken };
+  return { accessToken, refreshToken };
 }
