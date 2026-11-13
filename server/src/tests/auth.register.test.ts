@@ -1,15 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import app from "../app.js";
-import { prisma } from "../lib/prisma.js";
+import { prisma, clearDatabase } from "./helpers.js";
 import { verifyAccessToken } from "../lib/tokens.js";
 import crypto from "crypto";
 
 describe("POST /api/v1/auth/register", () => {
-  // Clear tables before every test in correct foreign key order
+  // Clear tables before every test using your helper function
   beforeEach(async () => {
-    await prisma.refreshToken.deleteMany();
-    await prisma.user.deleteMany();
+    await clearDatabase();
   });
 
   it("1, 2, 3. successfully registers a user, sets secure cookie, and persists hashed data correctly", async () => {
@@ -39,7 +38,8 @@ describe("POST /api/v1/auth/register", () => {
 
     // Verify Access Token validity
     const decodedToken = await verifyAccessToken(response.body.accessToken);
-    expect(decodedToken).toBeDefined();
+    expect(decodedToken.userId).toEqual(response.body.user.id);
+    expect(decodedToken.role).toBe("USER");
 
     // 2. Check Set-Cookie header security attributes
     const cookies = response.get("Set-Cookie");
