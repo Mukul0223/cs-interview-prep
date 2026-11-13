@@ -1,7 +1,6 @@
 import { Role } from "../generated/prisma/enums";
-import { hashPassword } from "../lib/password";
-import { prisma } from "../lib/prisma";
-import * as argon2 from "argon2";
+import { hashPassword } from "../lib/password.js";
+import { prisma } from "../lib/prisma.js";
 
 export async function clearDatabase() {
   await prisma.refreshToken.deleteMany();
