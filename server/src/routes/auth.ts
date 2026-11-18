@@ -1,11 +1,12 @@
-import { login, register } from "../services/authService.js";
+import { login, logout, refresh, register } from "../services/authService.js";
 import { Router } from "express";
 import { loginSchema, registerSchema } from "../schemas/auth.js";
 import { validate } from "../middleware/validate.js";
-import { setRefreshCookie } from "../lib/cookies.js";
+import { clearRefreshCookie, setRefreshCookie } from "../lib/cookies.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { prisma } from "../lib/prisma.js";
 import ApiError from "../utils/ApiError.js";
+import { requireAllowedOrigin } from "../middleware/requireAllowedOrigin.js";
 
 const router = Router();
 
@@ -54,4 +55,36 @@ router.get("/me", requireAuth, async (req, res, next) => {
   }
 });
 
+router.post("/refresh", requireAllowedOrigin, async (req, res, next) => {
+  try {
+    const rawRefreshToken = req.cookies?.refresh_token;
+
+    const { accessToken, refreshToken: newRawToken } =
+      await refresh(rawRefreshToken);
+
+    setRefreshCookie(res, newRawToken);
+
+    return res.status(200).json({ accessToken });
+  } catch (error: any) {
+    if (error?.statusCode === 401 || error?.status === 401) {
+      clearRefreshCookie(res);
+    }
+    next(error);
+  }
+});
+
+router.post("/logout", requireAllowedOrigin, async (req, res, next) => {
+  try {
+    const rawToken = req.cookies?.refresh_token;
+
+    await logout(rawToken);
+
+    clearRefreshCookie(res);
+
+    return res.status(204).end();
+  } catch (error) {
+    clearRefreshCookie(res);
+    next(error);
+  }
+});
 export default router;

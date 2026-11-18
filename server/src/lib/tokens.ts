@@ -2,6 +2,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { Role } from "../generated/prisma/client.js";
 import crypto from "node:crypto";
 import { env } from "../config/env.js";
+import { prisma } from "./prisma.js";
 
 function getAccessTokenSecret(): Uint8Array {
   const secret = env.JWT_ACCESS_SECRET;
@@ -54,4 +55,21 @@ export function generateRefreshToken(): string {
 
 export function hashRefreshToken(raw: string): string {
   return crypto.createHash("sha256").update(raw).digest("hex");
+}
+
+export async function verifyRefreshToken(rawToken: string | undefined) {
+  if (!rawToken) {
+    return null;
+  }
+
+  const hashToken = hashRefreshToken(rawToken);
+  const tokenRecord = await prisma.refreshToken.findUnique({
+    where: {
+      tokenHash: hashToken,
+    },
+    include: {
+      user: true,
+    },
+  });
+  return tokenRecord;
 }

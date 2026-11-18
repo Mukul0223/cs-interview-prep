@@ -16,7 +16,7 @@ export async function createSession(
 ) {
   const refreshToken = generateRefreshToken();
 
-  await tx.refreshToken.create({
+  const createdToken = await tx.refreshToken.create({
     data: {
       userId: user.id,
       tokenHash: hashRefreshToken(refreshToken),
@@ -30,5 +30,5 @@ export async function createSession(
     role: user.role,
   });
 
-  return { accessToken, refreshToken };
+  return { accessToken, refreshToken, refreshTokenId: createdToken.id };
 }

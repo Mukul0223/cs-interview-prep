@@ -3,6 +3,7 @@ import ApiError from "../utils/ApiError.js";
 import { createSession } from "./tokenService.js";
 import { prisma } from "../lib/prisma.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
+import { verifyRefreshToken } from "../lib/tokens.js";
 
 const dummyPassword = await hashPassword("dummy-Password");
 
@@ -102,4 +103,88 @@ export async function login({ email, password }: LoginInput) {
     accessToken: result.accessToken,
     refreshToken: result.refreshToken,
   };
+}
+
+export async function refresh(rawToken: string | undefined) {
+  const refreshToken = await verifyRefreshToken(rawToken);
+  if (!refreshToken || refreshToken.expiresAt < new Date()) {
+    throw new ApiError(
+      401,
+      "INVALID_REFRESH_TOKEN",
+      "Token is invalid or expired",
+    );
+  }
+  const now = new Date();
+  let isReuse = false;
+  let newRefreshToken: any = null;
+  await prisma.$transaction(async (tx) => {
+    const result = await tx.refreshToken.updateMany({
+      where: {
+        id: refreshToken.id,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: now,
+      },
+    });
+
+    if (result.count === 0) {
+      isReuse = true;
+      return;
+    }
+
+    newRefreshToken = await createSession(tx, {
+      id: refreshToken.userId,
+      role: refreshToken.user.role,
+    });
+
+    await tx.refreshToken.update({
+      where: {
+        id: refreshToken.id,
+      },
+      data: {
+        replacedByTokenId: newRefreshToken.refreshTokenId,
+      },
+    });
+  });
+
+  if (isReuse) {
+    await prisma.refreshToken.updateMany({
+      where: {
+        familyId: refreshToken.familyId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: now,
+      },
+    });
+    throw new ApiError(401, "INVALID_REFRESH_TOKEN", "Token reuse detected");
+  }
+
+  return newRefreshToken;
+}
+
+export async function logout(rawToken: string | undefined) {
+  if (!rawToken) {
+    return;
+  }
+
+  try {
+    const refreshToken = await verifyRefreshToken(rawToken);
+
+    if (refreshToken && !refreshToken.revokedAt) {
+      await prisma.refreshToken.updateMany({
+        where: {
+          id: refreshToken.id,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: new Date(),
+        },
+      });
+    }
+  } catch (err) {
+    console.error("Silent logout", err);
+  }
+  return;
 }
