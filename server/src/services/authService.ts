@@ -162,7 +162,14 @@ export async function refresh(rawToken: string | undefined) {
         revokedAt: now,
       },
     });
-    throw new ApiError(401, "INVALID_REFRESH_TOKEN", "Token reuse detected");
+    console.warn("refresh token reuse detected", {
+      familyId: refreshToken?.familyId,
+    });
+    throw new ApiError(
+      401,
+      "INVALID_REFRESH_TOKEN",
+      "Token is invalid or expired",
+    );
   }
 
   return newRefreshToken;

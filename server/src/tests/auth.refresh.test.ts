@@ -1,7 +1,12 @@
 import { it, beforeEach, describe, expect, afterAll } from "vitest";
 import app from "../app.js";
 import request from "supertest";
-import { clearDatabase, getAuthCookie, prisma } from "./helpers.js";
+import {
+  clearDatabase,
+  getAuthCookie,
+  extractRefreshCookie,
+  prisma,
+} from "./helpers.js";
 import { env } from "../config/env.js";
 import { verifyAccessToken } from "../lib/tokens.js";
 
@@ -14,18 +19,29 @@ describe("Auth Refresh Token Rotation and Logout Test", () => {
     await prisma.$disconnect();
   });
 
-  it("should successfully rotate tokens and update database audit trail", async () => {
-    const rawTokenA = await getAuthCookie();
-    const response = await request(app)
+  it("rotates the token and records the audit trail", async () => {
+    const { rawToken: tokenA, userId } = await getAuthCookie();
+
+    const res = await request(app)
       .post("/api/v1/auth/refresh")
-      .set("Cookie", `refresh_token=${rawTokenA}`)
+      .set("Cookie", `refresh_token=${tokenA}`)
       .set("Origin", env.CORS_ORIGIN);
 
-    expect(response.status).toBe(200);
-    expect(response.body).toHaveProperty("accessToken");
+    expect(res.status).toBe(200);
+    const decoded = await verifyAccessToken(res.body.accessToken);
+    expect(decoded.userId).toBe(userId);
+    expect(extractRefreshCookie(res)).not.toBe(tokenA);
 
-    const cookies = response.headers["set-cookie"];
-    expect(cookies).toBeDefined();
+    const rows = await prisma.refreshToken.findMany({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(rows).toHaveLength(2);
+    const [oldRow, newRow] = rows;
+    expect(oldRow.revokedAt).not.toBeNull();
+    expect(oldRow.replacedByTokenId).toBe(newRow.id);
+    expect(newRow.revokedAt).toBeNull();
+    expect(newRow.familyId).toBe(oldRow.familyId);
   });
 
   it("missing cookies gives 401 INVALID_REFRESH_TOKEN", async () => {
@@ -47,29 +63,30 @@ describe("Auth Refresh Token Rotation and Logout Test", () => {
     expect(res.body.error.code).toBe("INVALID_REFRESH_TOKEN");
   });
 
-  it("Expired token gives 401 and is not rotated", async () => {
-    const rawTokenA = await getAuthCookie();
+  it("expired token gives 401 and is not rotated", async () => {
+    const { rawToken, userId } = await getAuthCookie();
     await prisma.refreshToken.updateMany({
-      where: {
-        userId: rawTokenA.userId,
-      },
-      data: {
-        expiresAt: new Date(Date.now() - 1000 * 60 * 60),
-      },
+      where: { userId },
+      data: { expiresAt: new Date(Date.now() - 60 * 60 * 1000) },
     });
 
     const res = await request(app)
       .post("/api/v1/auth/refresh")
-      .set("Cookie", `refresh_token=${rawTokenA}`)
+      .set("Cookie", `refresh_token=${rawToken}`)
       .set("Origin", env.CORS_ORIGIN);
+
     expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe("INVALID_REFRESH_TOKEN");
+    const rows = await prisma.refreshToken.findMany({ where: { userId } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].revokedAt).toBeNull();
   });
 
   //// ==========================================
   // 4. TOKEN REUSE / FAMILY NUKE
   // ==========================================
   it("4. Reuse detection: presenting an old rotated token nukes the entire family", async () => {
-    const rawTokenA = await getAuthCookie();
+    const { rawToken: rawTokenA, userId } = await getAuthCookie();
 
     // First refresh: Token A -> Token B
     const res1 = await request(app)
@@ -78,15 +95,7 @@ describe("Auth Refresh Token Rotation and Logout Test", () => {
       .set("Origin", env.CORS_ORIGIN);
     expect(res1.status).toBe(200);
 
-    // Extract Token B's raw cookie value using the same regex pattern
-    const cookieHeader = res1.headers["set-cookie"];
-    const cookieArray = Array.isArray(cookieHeader)
-      ? cookieHeader
-      : [cookieHeader];
-    const rawCookieStr = cookieArray.find((c: string) =>
-      c.startsWith("refresh_token="),
-    );
-    const rawTokenB = rawCookieStr.match(/refresh_token=([^;]+)/)[1];
+    const rawTokenB = extractRefreshCookie(res1);
 
     // Replay Attack: Present Token A AGAIN -> Triggers reuse detection (401)
     const reuseRes = await request(app)
@@ -101,6 +110,10 @@ describe("Auth Refresh Token Rotation and Logout Test", () => {
       .set("Cookie", `refresh_token=${rawTokenB}`)
       .set("Origin", env.CORS_ORIGIN);
     expect(tokenBRes.status).toBe(401);
+
+    const rows = await prisma.refreshToken.findMany({ where: { userId } });
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.revokedAt !== null)).toBe(true);
   });
 
   // ==========================================
@@ -108,11 +121,11 @@ describe("Auth Refresh Token Rotation and Logout Test", () => {
   // ==========================================
   it("5. User isolation: User 1 reuse event does not affect User 2", async () => {
     // Log in two different test users (ensure both exist in your test seed/DB)
-    const user1Token = await getAuthCookie({
+    const { rawToken: user1Token } = await getAuthCookie({
       email: "test1@example.com",
       password: "password12345",
     });
-    const user2Token = await getAuthCookie({
+    const { rawToken: user2Token } = await getAuthCookie({
       email: "test2@example.com",
       password: "password12345",
     });
@@ -140,17 +153,17 @@ describe("Auth Refresh Token Rotation and Logout Test", () => {
   // 6. RACE CONDITIONS (CONCURRENCY)
   // ==========================================
   it("6. Concurrent refreshes with the same token result in one 200 and one 401", async () => {
-    const rawToken = await getAuthCookie();
+    const { rawToken: rawTokenA } = await getAuthCookie();
 
     // Fire two identical refresh requests at the exact same time
     const results = await Promise.all([
       request(app)
         .post("/api/v1/auth/refresh")
-        .set("Cookie", `refresh_token=${rawToken}`)
+        .set("Cookie", `refresh_token=${rawTokenA}`)
         .set("Origin", env.CORS_ORIGIN),
       request(app)
         .post("/api/v1/auth/refresh")
-        .set("Cookie", `refresh_token=${rawToken}`)
+        .set("Cookie", `refresh_token=${rawTokenA}`)
         .set("Origin", env.CORS_ORIGIN),
     ]);
 
@@ -163,36 +176,52 @@ describe("Auth Refresh Token Rotation and Logout Test", () => {
   // 7. ORIGIN VALIDATION (CSRF)
   // ==========================================
   it("7. Incorrect or missing Origin header returns 403", async () => {
-    const rawToken = await getAuthCookie();
+    const { rawToken: rawTokenA } = await getAuthCookie();
 
     const res = await request(app)
       .post("/api/v1/auth/refresh")
-      .set("Cookie", `refresh_token=${rawToken}`)
+      .set("Cookie", `refresh_token=${rawTokenA}`)
       .set("Origin", "http://malicious-attacker.com");
 
     expect(res.status).toBe(403);
+
+    const res1 = await request(app)
+      .post("/api/v1/auth/refresh")
+      .set("Cookie", `refresh_token=${rawTokenA}`);
+
+    expect(res1.status).toBe(403);
+
+    const res2 = await request(app)
+      .post("/api/v1/auth/refresh")
+      .set("Cookie", `refresh_token=${rawTokenA}`)
+      .set("Origin", env.CORS_ORIGIN);
+    expect(res2.status).toBe(200);
   });
 
   // ==========================================
   // 8. LOGOUT LIFECYCLE & IDEMPOTENCY
   // ==========================================
   it("8a. Logout clears cookie, revokes row, and blocks subsequent refreshes", async () => {
-    const rawToken = await getAuthCookie();
+    const { rawToken: rawTokenA, userId } = await getAuthCookie();
 
     const logoutRes = await request(app)
       .post("/api/v1/auth/logout")
-      .set("Cookie", `refresh_token=${rawToken}`)
+      .set("Cookie", `refresh_token=${rawTokenA}`)
       .set("Origin", env.CORS_ORIGIN);
 
     expect(logoutRes.status).toBe(204);
+
+    const row = await prisma.refreshToken.findFirst({ where: { userId } });
+    expect(row!.revokedAt).not.toBeNull();
     // Verify cookie was cleared (expires header set to past date)
     const setCookieHeader = logoutRes.headers["set-cookie"];
-    expect(setCookieHeader[0]).toMatch(/expires=/i);
+    expect(setCookieHeader[0]).toMatch(/^refresh_token=;/);
+    expect(setCookieHeader[0]).toMatch(/1970/);
 
     // Trying to refresh with that logged-out token gives 401
     const refreshRes = await request(app)
       .post("/api/v1/auth/refresh")
-      .set("Cookie", `refresh_token=${rawToken}`)
+      .set("Cookie", `refresh_token=${rawTokenA}`)
       .set("Origin", env.CORS_ORIGIN);
 
     expect(refreshRes.status).toBe(401);
@@ -210,17 +239,17 @@ describe("Auth Refresh Token Rotation and Logout Test", () => {
   // 9. ROLE HOT-RELOADING
   // ==========================================
   it("9. Refresh after database role promotion issues token with ADMIN role", async () => {
-    const rawToken = await getAuthCookie();
+    const { rawToken: rawTokenA, userId } = await getAuthCookie();
 
     // Directly promote user to ADMIN in the database
     await prisma.user.update({
-      where: { email: "test1@example.com" },
+      where: { id: userId },
       data: { role: "ADMIN" },
     });
 
     const res = await request(app)
       .post("/api/v1/auth/refresh")
-      .set("Cookie", `refresh_token=${rawToken}`)
+      .set("Cookie", `refresh_token=${rawTokenA}`)
       .set("Origin", env.CORS_ORIGIN);
 
     expect(res.status).toBe(200);

@@ -1,5 +1,5 @@
-import request from "supertest";
-import { Role } from "../generated/prisma/enums";
+import request, { type Response } from "supertest";
+import type { Role } from "../generated/prisma/enums.js";
 import { hashPassword } from "../lib/password.js";
 import { prisma } from "../lib/prisma.js";
 import app from "../app.js";
@@ -31,13 +31,22 @@ export async function createTestUser(
   });
 }
 
+export function extractRefreshCookie(res: Response): string {
+  const header = res.headers["set-cookie"];
+  const list = Array.isArray(header) ? header : header ? [header] : [];
+  const line = list.find((c: string) => c.startsWith("refresh_token="));
+  const match = line?.match(/refresh_token=([^;]+)/);
+  if (!match?.[1]) throw new Error("refresh_token cookie not found");
+  return match[1];
+}
+
 export async function getAuthCookie(
   credentials = {
     email: "test1@example.com",
     password: "password12345",
   },
 ) {
-  await createTestUser({
+  const user = await createTestUser({
     email: credentials.email,
     password: credentials.password,
     displayName: "Test1",
@@ -48,25 +57,7 @@ export async function getAuthCookie(
     .send(credentials)
     .set("Origin", env.CORS_ORIGIN);
 
-  const cookies = response.headers["set-cookie"];
-  if (!cookies || cookies.length === 0) {
-    throw new Error("Login failed. No set-cookie header returned from server");
-  }
-
-  const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
-  const rawCookieString = cookieArray.find((c: string) =>
-    c.startsWith("refresh_token="),
-  );
-  if (!rawCookieString) {
-    throw new Error("refresh_token cookie not found in set-cookie headers");
-  }
-
-  const match = rawCookieString.match(/refresh_token=([^;]+)/);
-  if (!match || !match[1]) {
-    throw new Error("Failed to parse refresh_token value from cookie string");
-  }
-
-  return match[1];
+  return { rawToken: extractRefreshCookie(response), userId: user.id };
 }
 
 export { prisma };
