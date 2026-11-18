@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import * as z from "zod";
-import ApiError from "../utils/ApiError.js";
+import { validationFailed } from "../utils/errors.js";
 
 export const validate = <T extends z.ZodType>(schema: T) => {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -11,14 +11,7 @@ export const validate = <T extends z.ZodType>(schema: T) => {
         field: issue.path.join("."),
         message: issue.message,
       }));
-      return next(
-        new ApiError(
-          400,
-          "VALIDATION_ERROR",
-          "Validation Failed",
-          formattedErrors,
-        ),
-      );
+      return next(validationFailed(formattedErrors));
     }
     req.body = result.data;
     next();

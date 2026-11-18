@@ -40,7 +40,7 @@ export function extractRefreshCookie(res: Response): string {
   return match[1];
 }
 
-export async function getAuthCookie(
+export async function loginTestUser(
   credentials = {
     email: "test1@example.com",
     password: "password12345",
@@ -57,7 +57,31 @@ export async function getAuthCookie(
     .send(credentials)
     .set("Origin", env.CORS_ORIGIN);
 
-  return { rawToken: extractRefreshCookie(response), userId: user.id };
+  return {
+    rawToken: extractRefreshCookie(response),
+    userId: user.id,
+    accessToken: response.body.accessToken,
+  };
+}
+
+export function postRefresh(
+  rawToken?: string,
+  origin: string | null = env.CORS_ORIGIN,
+) {
+  const req = request(app).post("/api/v1/auth/refresh");
+  if (rawToken !== undefined) req.set("Cookie", `refresh_token=${rawToken}`);
+  if (origin !== null) req.set("Origin", origin);
+  return req;
+}
+
+export function postLogout(
+  rawToken?: string,
+  origin: string | null = env.CORS_ORIGIN,
+) {
+  const req = request(app).post("/api/v1/auth/logout");
+  if (rawToken !== undefined) req.set("Cookie", `refresh_token=${rawToken}`);
+  if (origin !== null) req.set("Origin", origin);
+  return req;
 }
 
 export { prisma };

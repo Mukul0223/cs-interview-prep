@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { errorFields, logger } from "../lib/logger.js";
 import ApiError from "../utils/ApiError.js";
 
 export const errorHandler = (
@@ -47,7 +48,11 @@ export const errorHandler = (
 
   // Log unexpected internal server errors (do not log operational ApiErrors)
   if (!isApiError) {
-    console.error(err);
+    logger.error("unhandled_error", {
+      ...errorFields(err),
+      method: req.method,
+      path: req.path,
+    });
   }
 
   // Build the response object cleanly to satisfy TypeScript's strict types

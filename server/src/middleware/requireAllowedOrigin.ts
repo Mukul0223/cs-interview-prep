@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { env } from "../config/env.js";
-import ApiError from "../utils/ApiError.js";
+import { forbiddenOrigin } from "../utils/errors.js";
 
 export function requireAllowedOrigin(
   req: Request,
@@ -9,7 +9,7 @@ export function requireAllowedOrigin(
 ) {
   const origin = req.headers.origin;
   if (!origin || origin !== env.CORS_ORIGIN) {
-    throw new ApiError(403, "FORBIDDEN_ORIGIN", "Invalid or missing origin");
+    throw forbiddenOrigin();
   }
 
   next();
