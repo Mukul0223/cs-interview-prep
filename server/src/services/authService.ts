@@ -133,10 +133,14 @@ export async function refresh(rawToken: string | undefined) {
       return;
     }
 
-    newRefreshToken = await createSession(tx, {
-      id: refreshToken.userId,
-      role: refreshToken.user.role,
-    });
+    newRefreshToken = await createSession(
+      tx,
+      {
+        id: refreshToken.userId,
+        role: refreshToken.user.role,
+      },
+      refreshToken.familyId,
+    );
 
     await tx.refreshToken.update({
       where: {

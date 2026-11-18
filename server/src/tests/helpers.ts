@@ -37,6 +37,12 @@ export async function getAuthCookie(
     password: "password12345",
   },
 ) {
+  await createTestUser({
+    email: credentials.email,
+    password: credentials.password,
+    displayName: "Test1",
+  });
+
   const response = await request(app)
     .post("/api/v1/auth/login")
     .send(credentials)
