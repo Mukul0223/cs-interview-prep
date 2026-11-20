@@ -1,5 +1,5 @@
 import request, { type Response } from "supertest";
-import type { Role } from "../generated/prisma/enums.js";
+import { Role } from "../generated/prisma/enums.js";
 import { hashPassword } from "../lib/password.js";
 import { prisma } from "../lib/prisma.js";
 import app from "../app.js";
@@ -45,11 +45,13 @@ export async function loginTestUser(
     email: "test1@example.com",
     password: "password12345",
   },
+  role?: Role
 ) {
   const user = await createTestUser({
     email: credentials.email,
     password: credentials.password,
     displayName: "Test1",
+    role
   });
 
   const response = await request(app)

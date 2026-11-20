@@ -132,3 +132,19 @@ export async function revokeRefreshToken(rawToken: string | undefined) {
     data: { revokedAt: new Date() },
   });
 }
+
+export async function revokeAllUserTokens(
+  tx: Prisma.TransactionClient,
+  userId: string,
+) {
+  const now = new Date();
+  return tx.refreshToken.updateMany({
+    where: {
+      userId,
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: now,
+    },
+  });
+}

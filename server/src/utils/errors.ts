@@ -21,3 +21,12 @@ export const forbiddenOrigin = () =>
 
 export const validationFailed = (details: unknown) =>
   new ApiError(400, "VALIDATION_ERROR", "Validation Failed", details);
+
+export const invalidCurrentPassword = () =>
+  new ApiError(
+    401,
+    "INVALID_CURRENT_PASSWORD",
+    "Invalid or Incorrect current password",
+  );
+
+export const forbidden = () => new ApiError(403, "FORBIDDEN", "Unauthoraized");
