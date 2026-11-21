@@ -10,7 +10,7 @@ if (existsSync(".env")) {
 
 const seedEnvSchema = z.object({
   ADMIN_EMAIL: z.string().trim().toLowerCase().pipe(z.email().max(254)),
-  ADMIN_PASSWORD: z.string().min(1).max(128),
+  ADMIN_PASSWORD: z.string().min(12).max(128),
 });
 
 async function main() {
@@ -40,15 +40,13 @@ async function main() {
   const user = await ensureAdmin(ADMIN_EMAIL, ADMIN_PASSWORD);
 
   if (!userExists) {
-    logger.info("Created admin user", { email: user.email, userId: user.id });
+    logger.info("Created admin user", { userId: user.id });
   } else if (userExists.role !== "ADMIN") {
     logger.info("Promoted existing user to ADMIN", {
-      email: user.email,
       userId: user.id,
     });
   } else {
     logger.info("Admin user already exists", {
-      email: user.email,
       userId: user.id,
     });
   }

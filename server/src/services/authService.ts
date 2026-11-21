@@ -137,7 +137,10 @@ export async function changePassword(
 
     await revokeAllUserTokens(tx, userId);
 
-    const { refreshToken } = await createSession(tx, user);
+    const { refreshToken } = await createSession(tx, {
+      id: user.id,
+      role: user.role,
+    });
     return refreshToken;
   });
 }

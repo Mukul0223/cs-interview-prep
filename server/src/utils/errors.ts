@@ -29,4 +29,9 @@ export const invalidCurrentPassword = () =>
     "Invalid or Incorrect current password",
   );
 
-export const forbidden = () => new ApiError(403, "FORBIDDEN", "Unauthoraized");
+export const forbidden = () =>
+  new ApiError(
+    403,
+    "FORBIDDEN",
+    "You do not have permission to perform this action.",
+  );
