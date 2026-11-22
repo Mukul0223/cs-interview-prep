@@ -1,82 +1,143 @@
-import { useState, useEffect } from "react";
+import { useState, type SubmitEvent } from "react";
+import { getMe } from "./api/auth";
+import { ApiRequestError, setAccessToken } from "./api/http";
+import { AuthProvider } from "./auth/AuthProvider";
+import { useAuth } from "./auth/useAuth";
 
-type Status = "checking" | "ok" | "unreachable";
+function DevAuthPanel() {
+  const { status, user, login, logout } = useAuth();
 
-const STATUS_CONFIG: Record<Status, { text: string; style: string }> = {
-  checking: {
-    text: "Checking API...",
-    style: "bg-amber-100 text-amber-800 border-amber-300",
-  },
-  ok: {
-    text: "API ok",
-    style: "bg-emerald-100 text-emerald-800 border-emerald-300",
-  },
-  unreachable: {
-    text: "API unreachable",
-    style: "bg-rose-100 text-rose-800 border-rose-300",
-  },
-};
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [output, setOutput] = useState<string>("");
 
-export default function App() {
-  const [status, setStatus] = useState<Status>("checking");
+  async function handleLogin(e: SubmitEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    setOutput("");
+    try {
+      const loggedInUser = await login({ email, password });
+      setPassword("");
+      setOutput(`Logged in as ${loggedInUser.email}`);
+    } catch (err) {
+      setOutput(formatError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
 
-  useEffect(() => {
-    const checkApiHealth = async () => {
-      try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
-        const response = await fetch(`${baseUrl}/health`);
+  async function handleLogout() {
+    setBusy(true);
+    setOutput("");
+    try {
+      await logout();
+      setOutput("Logged out");
+    } catch (err) {
+      setOutput(formatError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
 
-        if (!response.ok) {
-          setStatus("unreachable");
-          return;
-        }
-
-        const data = await response.json();
-        setStatus(data.status === "ok" ? "ok" : "unreachable");
-      } catch {
-        setStatus("unreachable");
-      }
-    };
-
-    checkApiHealth();
-  }, []);
-
-  const { text, style } = STATUS_CONFIG[status];
+  async function handleCallMeWithBrokenToken() {
+    setBusy(true);
+    setOutput("");
+    setAccessToken("bad");
+    try {
+      const me = await getMe();
+      setOutput(`GET /me succeeded: ${JSON.stringify(me)}`);
+    } catch (err) {
+      setOutput(`GET /me failed: ${formatError(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-900 px-4">
-      <div className="w-full max-w-md p-8 bg-white border border-slate-200 rounded-2xl shadow-sm text-center">
-        <h1 className="text-xl font-bold mb-6 tracking-tight text-slate-800">
-          System Status Dashboard
-        </h1>
+    <section className="m-4 max-w-lg rounded-lg border-2 border-dashed border-amber-500 bg-amber-50/40 p-4 font-sans text-sm text-slate-900">
+      <p className="mb-3 font-bold text-amber-800">
+        TEMPORARY DEV AUTH PANEL (remove before production)
+      </p>
 
-        <div
-          className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium border ${style}`}
+      <p className="mb-3 text-slate-700">
+        <span className="font-semibold text-slate-900">Status:</span> {status} |{" "}
+        <span className="font-semibold text-slate-900">User:</span>{" "}
+        {user ? `${user.displayName} (${user.email}, ${user.role})` : "null"}
+      </p>
+
+      <form onSubmit={handleLogin} className="mb-3 flex flex-wrap gap-2">
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          disabled={busy}
+          className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-slate-900 placeholder:text-slate-400 focus:border-amber-600 focus:outline-none disabled:opacity-50"
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          disabled={busy}
+          className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-slate-900 placeholder:text-slate-400 focus:border-amber-600 focus:outline-none disabled:opacity-50"
+        />
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded bg-slate-900 px-3 py-1.5 font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {status === "checking" && (
-            <svg
-              className="motion-safe:animate-spin -ml-1 mr-2 h-4 w-4 text-amber-600"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-          )}
-          {text}
-        </div>
-      </div>
-    </div>
+          Login
+        </button>
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={busy}
+          className="rounded border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Logout
+        </button>
+      </form>
+
+      <button
+        type="button"
+        onClick={handleCallMeWithBrokenToken}
+        disabled={busy}
+        className="rounded bg-amber-600 px-3 py-1.5 font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Call /me with a broken token
+      </button>
+
+      {output && (
+        <pre className="mt-3 overflow-x-auto rounded bg-slate-900 p-2.5 font-mono text-xs whitespace-pre-wrap wrap-break-words text-slate-50">
+          {output}
+        </pre>
+      )}
+    </section>
   );
 }
+
+function formatError(err: unknown): string {
+  if (err instanceof ApiRequestError) {
+    return `${err.status} ${err.code}: ${err.message}`;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return String(err);
+}
+
+export function App() {
+  return (
+    <AuthProvider>
+      <main className="min-h-screen bg-white">
+        <DevAuthPanel />
+      </main>
+    </AuthProvider>
+  );
+}
+
+export default App;
