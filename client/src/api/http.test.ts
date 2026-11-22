@@ -122,6 +122,7 @@ describe("http client", () => {
 
         if (url === "/api/v1/auth/refresh") {
           expect(init?.method).toBe("POST");
+          expect(init?.credentials).toBe("same-origin");
           return jsonResponse({ accessToken: "fresh-token" });
         }
 
@@ -253,6 +254,65 @@ describe("http client", () => {
     expect(String(fetchMock.mock.calls[0][0])).toBe("/api/v1/auth/login");
   });
 
+  it("throws after one refresh without looping when the retried request returns 401", async () => {
+    let secretAttempts = 0;
+
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const headers = new Headers(init?.headers);
+
+        if (url === "/api/v1/secret") {
+          secretAttempts += 1;
+          expect(headers.get("Authorization")).toBe(
+            secretAttempts === 1 ? "Bearer old-token" : "Bearer new-token",
+          );
+          return jsonResponse(
+            {
+              error: {
+                code: "UNAUTHENTICATED",
+                message: "Unauthorized",
+              },
+            },
+            { status: 401, statusText: "Unauthorized" },
+          );
+        }
+
+        if (url === "/api/v1/auth/refresh") {
+          return jsonResponse({ accessToken: "new-token" });
+        }
+
+        throw new Error(`Unexpected request to ${url}`);
+      },
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { apiFetch, ApiRequestError, setAccessToken } =
+      await loadHttpModule();
+    setAccessToken("old-token");
+
+    let caught: unknown;
+    try {
+      await apiFetch("/secret");
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(ApiRequestError);
+    expect(caught).toMatchObject({
+      status: 401,
+      code: "UNAUTHENTICATED",
+      message: "Unauthorized",
+    });
+    expect(secretAttempts).toBe(2);
+
+    const refreshCalls = fetchMock.mock.calls.filter(
+      ([url]) => String(url) === "/api/v1/auth/refresh",
+    );
+    expect(refreshCalls).toHaveLength(1);
+  });
+
   it("clears token, calls onSessionExpired, and throws when refresh fails", async () => {
     const onExpired = vi.fn();
 
@@ -275,7 +335,7 @@ describe("http client", () => {
         return jsonResponse(
           {
             error: {
-              code: "REFRESH_FAILED",
+              code: "INVALID_REFRESH_TOKEN",
               message: "Refresh token invalid",
             },
           },

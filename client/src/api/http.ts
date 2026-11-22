@@ -138,10 +138,8 @@ export async function refreshAccessToken(): Promise<string | null> {
 
       const payload = (await response.json()) as {
         accessToken?: string | null;
-        data?: { accessToken?: string | null };
       };
-      const nextToken =
-        payload.accessToken ?? payload.data?.accessToken ?? null;
+      const nextToken = payload.accessToken ?? null;
 
       if (!nextToken) {
         setAccessToken(null);

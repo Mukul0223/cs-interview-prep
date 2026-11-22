@@ -1,7 +1,6 @@
 import { useState, type SubmitEvent } from "react";
 import { getMe } from "./api/auth";
 import { ApiRequestError, setAccessToken } from "./api/http";
-import { AuthProvider } from "./auth/AuthProvider";
 import { useAuth } from "./auth/useAuth";
 
 function DevAuthPanel() {
@@ -132,11 +131,9 @@ function formatError(err: unknown): string {
 
 export function App() {
   return (
-    <AuthProvider>
-      <main className="min-h-screen bg-white">
-        <DevAuthPanel />
-      </main>
-    </AuthProvider>
+    <main className="min-h-screen bg-white">
+      <DevAuthPanel />
+    </main>
   );
 }
 

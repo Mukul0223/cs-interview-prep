@@ -1,6 +1,6 @@
 import { apiFetch, setAccessToken } from "./http";
 
-export type UserRole = "user" | "admin" | (string & {});
+export type UserRole = "USER" | "ADMIN";
 
 export interface User {
   id: string;
@@ -26,65 +26,36 @@ export interface ChangePasswordInput {
 }
 
 export interface AuthSessionResponse {
-  accessToken?: string;
-  user?: User;
-}
-
-function hasWrappedUser(
-  payload: User | { user: User },
-): payload is { user: User } {
-  return "user" in payload && Boolean(payload.user);
-}
-
-function extractUser(payload: User | { user: User }): User {
-  if (hasWrappedUser(payload)) {
-    return payload.user;
-  }
-  return payload;
+  accessToken: string;
+  user: User;
 }
 
 export async function register(input: RegisterInput): Promise<User> {
-  const res = await apiFetch<AuthSessionResponse | User>("/auth/register", {
+  const res = await apiFetch<AuthSessionResponse>("/auth/register", {
     method: "POST",
     body: input,
     auth: false,
   });
 
-  if (
-    "accessToken" in res &&
-    typeof res.accessToken === "string" &&
-    res.accessToken
-  ) {
+  if (res.accessToken) {
     setAccessToken(res.accessToken);
   }
 
-  if ("user" in res && res.user) {
-    return res.user;
-  }
-
-  return getMe();
+  return res.user;
 }
 
 export async function login(input: LoginInput): Promise<User> {
-  const res = await apiFetch<AuthSessionResponse | User>("/auth/login", {
+  const res = await apiFetch<AuthSessionResponse>("/auth/login", {
     method: "POST",
     body: input,
     auth: false,
   });
 
-  if (
-    "accessToken" in res &&
-    typeof res.accessToken === "string" &&
-    res.accessToken
-  ) {
+  if (res.accessToken) {
     setAccessToken(res.accessToken);
   }
 
-  if ("user" in res && res.user) {
-    return res.user;
-  }
-
-  return getMe();
+  return res.user;
 }
 
 export async function logout(): Promise<void> {
@@ -98,10 +69,10 @@ export async function logout(): Promise<void> {
 }
 
 export async function getMe(): Promise<User> {
-  const res = await apiFetch<User | { user: User }>("/auth/me", {
+  const res = await apiFetch<{ user: User }>("/auth/me", {
     method: "GET",
   });
-  return extractUser(res);
+  return res.user;
 }
 
 export async function changePassword(
