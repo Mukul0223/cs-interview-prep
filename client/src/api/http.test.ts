@@ -37,12 +37,15 @@ describe("http client", () => {
   }
 
   it("handles a normal success and attaches Bearer token", async () => {
+    let seenUrl: string | undefined;
+    let seenAuthHeader: string | null = null;
+
     const fetchMock = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         const headers = new Headers(init?.headers);
-        expect(url).toBe("/api/v1/users/me");
-        expect(headers.get("Authorization")).toBe("Bearer initial-token");
+        seenUrl = url;
+        seenAuthHeader = headers.get("Authorization");
         return jsonResponse({ id: "u_1", email: "ada@example.com" });
       },
     );
@@ -56,6 +59,8 @@ describe("http client", () => {
 
     expect(data).toEqual({ id: "u_1", email: "ada@example.com" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(seenUrl).toBe("/api/v1/users/me");
+    expect(seenAuthHeader).toBe("Bearer initial-token");
   });
 
   it("converts an error body into an ApiRequestError with the right code", async () => {
@@ -95,6 +100,8 @@ describe("http client", () => {
 
   it("triggers one refresh on 401 UNAUTHENTICATED and retries once with the new token", async () => {
     let profileAttempts = 0;
+    let firstAttemptAuth: string | null = null;
+    let secondAttemptAuth: string | null = null;
     let refreshInit: RequestInit | undefined;
 
     const fetchMock = vi.fn(
@@ -105,7 +112,7 @@ describe("http client", () => {
         if (url === "/api/v1/profile") {
           profileAttempts += 1;
           if (profileAttempts === 1) {
-            expect(headers.get("Authorization")).toBe("Bearer expired-token");
+            firstAttemptAuth = headers.get("Authorization");
             return jsonResponse(
               {
                 error: {
@@ -117,7 +124,7 @@ describe("http client", () => {
             );
           }
 
-          expect(headers.get("Authorization")).toBe("Bearer fresh-token");
+          secondAttemptAuth = headers.get("Authorization");
           return jsonResponse({ name: "Grace" });
         }
 
@@ -145,6 +152,8 @@ describe("http client", () => {
     );
     expect(refreshCalls).toHaveLength(1);
     expect(profileAttempts).toBe(2);
+    expect(firstAttemptAuth).toBe("Bearer expired-token");
+    expect(secondAttemptAuth).toBe("Bearer fresh-token");
     expect(refreshInit?.method).toBe("POST");
     expect(refreshInit?.credentials).toBe("same-origin");
   });
@@ -258,6 +267,7 @@ describe("http client", () => {
 
   it("throws after one refresh without looping when the retried request returns 401", async () => {
     let secretAttempts = 0;
+    const secretAuthHeaders: Array<string | null> = [];
 
     const fetchMock = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -266,9 +276,7 @@ describe("http client", () => {
 
         if (url === "/api/v1/secret") {
           secretAttempts += 1;
-          expect(headers.get("Authorization")).toBe(
-            secretAttempts === 1 ? "Bearer old-token" : "Bearer new-token",
-          );
+          secretAuthHeaders.push(headers.get("Authorization"));
           return jsonResponse(
             {
               error: {
@@ -308,6 +316,7 @@ describe("http client", () => {
       message: "Unauthorized",
     });
     expect(secretAttempts).toBe(2);
+    expect(secretAuthHeaders).toEqual(["Bearer old-token", "Bearer new-token"]);
 
     const refreshCalls = fetchMock.mock.calls.filter(
       ([url]) => String(url) === "/api/v1/auth/refresh",

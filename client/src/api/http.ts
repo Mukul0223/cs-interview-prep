@@ -81,7 +81,7 @@ async function parseErrorResponse(response: Response): Promise<{
   const fallbackMessage =
     response.statusText || `Request failed (${response.status})`;
 
-  let rawBody: unknown = null;
+  let rawBody: unknown;
   try {
     rawBody = await response.json();
   } catch {

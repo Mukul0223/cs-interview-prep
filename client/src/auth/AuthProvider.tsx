@@ -103,12 +103,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       await logoutRequest();
     } finally {
-      setState({
-        status: "unauthenticated",
-        user: null,
-      });
+      markUnauthenticated();
     }
-  }, []);
+  }, [markUnauthenticated]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
