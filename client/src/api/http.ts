@@ -124,7 +124,7 @@ export async function refreshAccessToken(): Promise<string | null> {
     try {
       const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
         method: "POST",
-        credentials: "include",
+        credentials: "same-origin",
         headers: {
           Accept: "application/json",
         },
@@ -202,7 +202,7 @@ export async function apiFetch<T = unknown>(
         : body instanceof FormData
           ? body
           : JSON.stringify(body),
-    credentials: "include",
+    credentials: "same-origin",
     signal,
   });
 

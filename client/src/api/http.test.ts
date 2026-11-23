@@ -95,6 +95,7 @@ describe("http client", () => {
 
   it("triggers one refresh on 401 UNAUTHENTICATED and retries once with the new token", async () => {
     let profileAttempts = 0;
+    let refreshInit: RequestInit | undefined;
 
     const fetchMock = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -121,8 +122,7 @@ describe("http client", () => {
         }
 
         if (url === "/api/v1/auth/refresh") {
-          expect(init?.method).toBe("POST");
-          expect(init?.credentials).toBe("same-origin");
+          refreshInit = init;
           return jsonResponse({ accessToken: "fresh-token" });
         }
 
@@ -145,6 +145,8 @@ describe("http client", () => {
     );
     expect(refreshCalls).toHaveLength(1);
     expect(profileAttempts).toBe(2);
+    expect(refreshInit?.method).toBe("POST");
+    expect(refreshInit?.credentials).toBe("same-origin");
   });
 
   it("coalesces three simultaneous 401s into a single refresh call", async () => {
