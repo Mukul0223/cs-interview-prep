@@ -2,6 +2,15 @@ import { useState, type SubmitEvent } from "react";
 import { getMe } from "./api/auth";
 import { ApiRequestError, setAccessToken } from "./api/http";
 import { useAuth } from "./auth/useAuth";
+import { Routes, Route } from "react-router";
+import { HomePage } from "./pages/HomePage";
+import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
+import { ProfilePage } from "./pages/ProfilePage";
+import { ProtectedRoute } from "./auth/ProtectedRoute";
+import { AdminPage } from "./pages/AdminPage";
+import { AdminRoute } from "./auth/AdminRoute";
+import { NotFoundPage } from "./pages/NotFoundPage";
 
 function DevAuthPanel() {
   const { status, user, login, logout } = useAuth();
@@ -132,7 +141,20 @@ function formatError(err: unknown): string {
 export function App() {
   return (
     <main className="min-h-screen bg-white">
-      <DevAuthPanel />
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/profile" element={<ProfilePage />} />
+        </Route>
+
+        <Route element={<AdminRoute />}>
+          <Route path="/admin" element={<AdminPage />} />
+        </Route>
+
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
     </main>
   );
 }
