@@ -1,22 +1,27 @@
 import { useAuth } from "../auth/useAuth";
 
 export function ProfilePage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   return (
-    <main className="mx-auto max-w-2xl bg-bg p-6 font-sans text-ink">
+    <div className="mx-auto max-w-2xl">
       <h1 className="text-2xl font-bold">Profile</h1>
-      <pre className="mt-4 overflow-x-auto rounded-sm bg-surface p-4 text-sm text-ink">
-        {JSON.stringify(user, null, 2)}
-      </pre>
-      {logout && (
-        <button
-          onClick={logout}
-          className="mt-4 rounded-sm bg-accent px-4 py-2 text-base text-bg"
-        >
-          Log out
-        </button>
+      {user && (
+        <dl className="mt-4 space-y-3 rounded-sm bg-surface p-4 text-sm">
+          <div>
+            <dt className="font-medium text-muted">Display name</dt>
+            <dd>{user.displayName}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-muted">Email</dt>
+            <dd>{user.email}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-muted">Role</dt>
+            <dd>{user.role}</dd>
+          </div>
+        </dl>
       )}
-    </main>
+    </div>
   );
 }

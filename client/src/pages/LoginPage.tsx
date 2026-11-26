@@ -1,7 +1,8 @@
 import { useState, type SubmitEvent } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router";
+import { Link, Navigate, useLocation } from "react-router";
 import { ApiRequestError } from "../api/http";
 import { useAuth } from "../auth/useAuth";
+import { getFieldErrors } from "../api/fieldErrors";
 
 type LoginField = "email" | "password";
 type FieldErrors = Partial<Record<LoginField, string>>;
@@ -24,47 +25,8 @@ function getRedirectPath(state: unknown): string {
   return "/";
 }
 
-function extractFieldErrors<K extends string>(
-  err: ApiRequestError,
-  allowedKeys: readonly K[],
-): Partial<Record<K, string>> {
-  const result: Partial<Record<K, string>> = {};
-  const errWithDetails = err as ApiRequestError & {
-    details?: Record<string, unknown>;
-    fields?: Record<string, unknown>;
-    errors?: Record<string, unknown>;
-  };
-
-  const rawMap =
-    errWithDetails.details ?? errWithDetails.fields ?? errWithDetails.errors;
-
-  if (rawMap && typeof rawMap === "object") {
-    for (const key of allowedKeys) {
-      const val = rawMap[key];
-      if (typeof val === "string" && val.trim()) {
-        result[key] = val;
-      } else if (Array.isArray(val) && typeof val[0] === "string") {
-        result[key] = val[0];
-      }
-    }
-  }
-
-  // Fallback if validation details are encoded in err.message (e.g., "password: must be at least 10 characters")
-  if (Object.keys(result).length === 0 && err.message) {
-    const lowerMsg = err.message.toLowerCase();
-    for (const key of allowedKeys) {
-      if (lowerMsg.includes(key.toLowerCase())) {
-        result[key] = err.message;
-      }
-    }
-  }
-
-  return result;
-}
-
 export function LoginPage() {
   const { status, user, login } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
 
   const [email, setEmail] = useState("");
@@ -73,8 +35,9 @@ export function LoginPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
+  const redirectTo = getRedirectPath(location.state);
   if (status !== "loading" && user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={redirectTo} replace />;
   }
 
   async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
@@ -85,16 +48,12 @@ export function LoginPage() {
 
     try {
       await login({ email, password });
-      navigate(getRedirectPath(location.state), { replace: true });
     } catch (err: unknown) {
       if (err instanceof ApiRequestError) {
         if (err.code === "INVALID_CREDENTIALS") {
           setFormError(err.message || "Invalid email or password.");
         } else if (err.code === "VALIDATION_ERROR") {
-          const mapped = extractFieldErrors(err, [
-            "email",
-            "password",
-          ] as const);
+          const mapped = getFieldErrors(err, ["email", "password"] as const);
           setFieldErrors(mapped);
           if (Object.keys(mapped).length === 0) {
             setFormError(err.message || "Please check your input.");
@@ -113,7 +72,7 @@ export function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center bg-bg p-6 font-sans text-ink">
+    <div className="mx-auto max-w-md py-8">
       <section className="rounded-sm bg-surface p-6">
         <h1 className="text-xl font-bold">Sign in</h1>
         <p className="mt-1 text-sm text-muted">
@@ -209,6 +168,6 @@ export function LoginPage() {
           </Link>
         </p>
       </section>
-    </main>
+    </div>
   );
 }

@@ -8,8 +8,12 @@ export function AdminRoute() {
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader className="h-6 w-6 animate-spin" aria-label="Loading" />
+      <div role="status" className="flex items-center justify-center py-16">
+        <Loader
+          aria-hidden="true"
+          className="h-6 w-6 motion-safe:animate-spin"
+        />
+        <span className="sr-only">Loading</span>
       </div>
     );
   }
@@ -20,7 +24,7 @@ export function AdminRoute() {
 
   if (user.role !== "ADMIN") {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex items-center justify-center py-16">
         <p className="text-2xl">Permission denied</p>
       </div>
     );
